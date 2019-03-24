@@ -278,7 +278,7 @@ print('=' * 89)
 
 time_total = te_stats.sum().item()
 for p, t in zip(phases, te_stats):
-    print('{} time: {:3.4f} Percentage: {:.4f}%'.format(p, t.item(), t / time_total))
+    print('{} time: {:3.4f} Percentage: {:2.4f}%'.format(p, t.item(), 100. * t / time_total))
 if len(args.onnx_export) > 0:
     # Export the model in ONNX format.
     export_onnx(args.onnx_export, batch_size=1, seq_len=args.bptt)
