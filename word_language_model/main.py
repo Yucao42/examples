@@ -9,6 +9,7 @@ import torch.onnx
 
 import data
 import model
+from datetime import datetime as dt
 
 parser = argparse.ArgumentParser(description='PyTorch Wikitext-2 RNN/LSTM Language Model')
 parser.add_argument('--data', type=str, default='./data/wikitext-2',
@@ -46,6 +47,14 @@ parser.add_argument('--save', type=str, default='model.pt',
 parser.add_argument('--onnx-export', type=str, default='',
                     help='path to export the final model in onnx format')
 args = parser.parse_args()
+
+# Time profiling
+phases = ['Data preprocess', 'Model initialization', 'Not important', 'Data Fetching', 'Forwarding', 'Back propogation', 'Validation', 'Test evaluation']
+te_stats = torch.zeros(8)
+st_time  = dt.now()
+#time_total = 1
+#for p, t in zip(phases, te_stats):
+#    print('{} time: {:3.4f} Percentage: {:.4f}%'.format(p, t.item(), t / time_total))
 
 # Set the random seed manually for reproducibility.
 torch.manual_seed(args.seed)
@@ -88,6 +97,10 @@ train_data = batchify(corpus.train, args.batch_size)
 val_data = batchify(corpus.valid, eval_batch_size)
 test_data = batchify(corpus.test, eval_batch_size)
 
+# Time profiling
+te_stats[0] += (dt.now() - st_time).total_seconds()
+st_time  = dt.now()
+
 ###############################################################################
 # Build the model
 ###############################################################################
@@ -96,6 +109,10 @@ ntokens = len(corpus.dictionary)
 model = model.RNNModel(args.model, ntokens, args.emsize, args.nhid, args.nlayers, args.dropout, args.tied).to(device)
 
 criterion = nn.CrossEntropyLoss()
+
+# Time profiling
+te_stats[1] += (dt.now() - st_time).total_seconds()
+st_time  = dt.now()
 
 ###############################################################################
 # Training code
@@ -143,28 +160,50 @@ def evaluate(data_source):
 
 
 def train():
+
     # Turn on training mode which enables dropout.
+    st_time  = dt.now()
     model.train()
     total_loss = 0.
     start_time = time.time()
     ntokens = len(corpus.dictionary)
     hidden = model.init_hidden(args.batch_size)
+    
+    # Initialization time profiling
+    te_stats[2] += (dt.now() - st_time).total_seconds()
+    st_time = dt.now()
+
+    ## Time profiling
+    #te_stats[3] += (dt.now() - st_time).total_seconds()
+    #st_time  = dt.now()
+
     for batch, i in enumerate(range(0, train_data.size(0) - 1, args.bptt)):
+        st_time  = dt.now()
         data, targets = get_batch(train_data, i)
+        # Time profiling
+        te_stats[3] += (dt.now() - st_time).total_seconds()
+        st_time  = dt.now()
+
         # Starting each batch, we detach the hidden state from how it was previously produced.
         # If we didn't, the model would try backpropagating all the way to start of the dataset.
         hidden = repackage_hidden(hidden)
         model.zero_grad()
         output, hidden = model(data, hidden)
         loss = criterion(output.view(-1, ntokens), targets)
-        loss.backward()
+        # Time profiling
+        te_stats[4] += (dt.now() - st_time).total_seconds()
+        st_time  = dt.now()
 
+        loss.backward()
         # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
         torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
         for p in model.parameters():
             p.data.add_(-lr, p.grad.data)
 
         total_loss += loss.item()
+        # Time profiling
+        te_stats[5] += (dt.now() - st_time).total_seconds()
+        st_time  = dt.now()
 
         if batch % args.log_interval == 0 and batch > 0:
             cur_loss = total_loss / args.log_interval
@@ -195,7 +234,12 @@ try:
     for epoch in range(1, args.epochs+1):
         epoch_start_time = time.time()
         train()
+        # Time profiling
+        st_time  = dt.now()
         val_loss = evaluate(val_data)
+        # Time profiling
+        te_stats[6] += (dt.now() - st_time).total_seconds()
+        st_time  = dt.now()
         print('-' * 89)
         print('| end of epoch {:3d} | time: {:5.2f}s | valid loss {:5.2f} | '
                 'valid ppl {:8.2f}'.format(epoch, (time.time() - epoch_start_time),
@@ -221,12 +265,20 @@ with open(args.save, 'rb') as f:
     model.rnn.flatten_parameters()
 
 # Run on test data.
+# Time profiling
+st_time  = dt.now()
 test_loss = evaluate(test_data)
+# Time profiling
+te_stats[7] += (dt.now() - st_time).total_seconds()
+st_time  = dt.now()
 print('=' * 89)
 print('| End of training | test loss {:5.2f} | test ppl {:8.2f}'.format(
     test_loss, math.exp(test_loss)))
 print('=' * 89)
 
+time_total = te_stats.sum().item()
+for p, t in zip(phases, te_stats):
+    print('{} time: {:3.4f} Percentage: {:.4f}%'.format(p, t.item(), t / time_total))
 if len(args.onnx_export) > 0:
     # Export the model in ONNX format.
     export_onnx(args.onnx_export, batch_size=1, seq_len=args.bptt)
