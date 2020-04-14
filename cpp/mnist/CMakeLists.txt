@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
+set(CMAKE_PREFIX_PATH /proj/rdma-prefetch-PG0/groups/eric/libtorch/)
 project(mnist)
 
 find_package(Torch REQUIRED)

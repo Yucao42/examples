@@ -5,6 +5,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <chrono>
 
 // Where to find the MNIST dataset.
 const char* kDataRoot = "./data";
@@ -99,7 +100,7 @@ void test(
                      output,
                      targets,
                      /*weight=*/{},
-                     Reduction::Sum)
+                     at::Reduction::Sum)
                      .template item<float>();
     auto pred = output.argmax(1);
     correct += pred.eq(targets).sum().template item<int64_t>();
@@ -147,8 +148,21 @@ auto main() -> int {
   torch::optim::SGD optimizer(
       model.parameters(), torch::optim::SGDOptions(0.01).momentum(0.5));
 
+  auto start = std::chrono::steady_clock::now();
+  auto end = std::chrono::steady_clock::now();
+
   for (size_t epoch = 1; epoch <= kNumberOfEpochs; ++epoch) {
+    start = std::chrono::steady_clock::now();
     train(epoch, model, device, *train_loader, optimizer, train_dataset_size);
+    end = std::chrono::steady_clock::now();
+    std::cout << "\n[TIME] Training time in milleseconds : "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
+              << "ms" << std::endl;
+    start = end;
     test(model, device, *test_loader, test_dataset_size);
+    end = std::chrono::steady_clock::now();
+    std::cout << "[TIME] Testing time in milleseconds : "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
+              << "ms" << std::endl;
   }
 }

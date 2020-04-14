@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
+from time import time
 
 
 class Net(nn.Module):
@@ -106,8 +107,12 @@ def main():
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
 
     for epoch in range(1, args.epochs + 1):
+        start_time = time()
         train(args, model, device, train_loader, optimizer, epoch)
+        print("Training time: {:.2f}s".format(time() - start_time))
+        start_time = time()
         test(args, model, device, test_loader)
+        print("Test time: {:.2f}s".format(time() - start_time))
 
     if (args.save_model):
         torch.save(model.state_dict(),"mnist_cnn.pt")
