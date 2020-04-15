@@ -1,4 +1,6 @@
 #include <torch/torch.h>
+#include <cuda.h>
+#include <stdio.h>
 
 #include <cstddef>
 #include <cstdio>
@@ -7,6 +9,12 @@
 #include <vector>
 #include <chrono>
 
+#include "papi.h"
+#include "papi_test.h"
+
+#define PAPI 1
+
+#define NUM_EVENTS 2
 // Where to find the MNIST dataset.
 const char* kDataRoot = "./data";
 
@@ -113,7 +121,80 @@ void test(
       static_cast<double>(correct) / dataset_size);
 }
 
-auto main() -> int {
+
+int main(int argc, char** argv){
+  #ifdef PAPI
+  	int quiet=0;
+  	int retval, i;
+  	int EventSet = PAPI_NULL;
+  	long long values[NUM_EVENTS];
+  	/* REPLACE THE EVENT NAME 'PAPI_FP_OPS' WITH A CUDA EVENT 
+  	   FOR THE CUDA DEVICE YOU ARE RUNNING ON.
+  	   RUN papi_native_avail to get a list of CUDA events that are 
+  	   supported on your machine */
+          //char *EventName[] = { "PAPI_FP_OPS" };
+          char const *EventName[] = { "cuda:::event:elapsed_cycles_sm:device=0", "cuda:::event:active_warps:device=0" };
+  	int events[NUM_EVENTS];
+  	int eventCount = 0;
+  
+  
+  	/* Set TESTS_QUIET variable */
+  	quiet=tests_quiet( argc, argv );
+  	
+  	/* PAPI Initialization */
+  	retval = PAPI_library_init( PAPI_VER_CURRENT );
+  	if( retval != PAPI_VER_CURRENT ) {
+  		if (!quiet) printf("PAPI init failed\n");
+  		test_fail(__FILE__,__LINE__,
+  			"PAPI_library_init failed", 0 );
+  	}
+  
+  	if (!quiet) {
+  		printf( "PAPI_VERSION     : %4d %6d %7d\n",
+  			PAPI_VERSION_MAJOR( PAPI_VERSION ),
+  			PAPI_VERSION_MINOR( PAPI_VERSION ),
+  			PAPI_VERSION_REVISION( PAPI_VERSION ) );
+  	}
+  
+  	/* convert PAPI native events to PAPI code */
+  	for( i = 0; i < NUM_EVENTS; i++ ){
+                  retval = PAPI_event_name_to_code( (char *)EventName[i], &events[i] );
+  		printf( "PAPI RETURNS     : %4d\n", retval);
+  		if( retval != PAPI_OK ) {
+  			fprintf( stderr, "PAPI_event_name_to_code failed\n" );
+  			continue;
+  		}
+  		eventCount++;
+  		if (!quiet) printf( "Name %s --- Code: %#x\n", EventName[i], events[i] );
+  	}
+  
+  	/* if we did not find any valid events, just report test failed. */
+  	if (eventCount == 0) {
+  		if (!quiet) printf( "Test FAILED: no valid events found.\n");
+  		test_skip(__FILE__,__LINE__,"No events found",0);
+  		return 1;
+  	}
+  	
+  	retval = PAPI_create_eventset( &EventSet );
+  	if( retval != PAPI_OK ) {
+  		if (!quiet) printf( "PAPI_create_eventset failed\n" );
+  		test_fail(__FILE__,__LINE__,"Cannot create eventset",retval);
+  	}	
+  
+          // If multiple GPUs/contexts were being used, 
+          // you need to switch to each device before adding its events
+          // e.g. cudaSetDevice( 0 );
+  	retval = PAPI_add_events( EventSet, events, eventCount );
+  	if( retval != PAPI_OK ) {
+  		fprintf( stderr, "PAPI_add_events failed\n" );
+  	}
+  
+  	retval = PAPI_start( EventSet );
+  	if( retval != PAPI_OK ) {
+  		fprintf( stderr, "PAPI_start failed\n" );
+  	}
+  #endif
+
   torch::manual_seed(1);
 
   torch::DeviceType device_type;
@@ -165,4 +246,22 @@ auto main() -> int {
               << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
               << "ms" << std::endl;
   }
+  #ifdef PAPI
+  	retval = PAPI_stop( EventSet, values );
+  	if( retval != PAPI_OK )
+  		fprintf( stderr, "PAPI_stop failed\n" );
+  
+  	retval = PAPI_cleanup_eventset(EventSet);
+  	if( retval != PAPI_OK )
+  		fprintf(stderr, "PAPI_cleanup_eventset failed\n");
+  
+  	retval = PAPI_destroy_eventset(&EventSet);
+  	if (retval != PAPI_OK)
+  		fprintf(stderr, "PAPI_destroy_eventset failed\n");
+  
+  	PAPI_shutdown();
+  
+  	for( i = 0; i < eventCount; i++ )
+  		if (!quiet) printf( "%12lld \t\t --> %s \n", values[i], EventName[i] );
+  #endif
 }
