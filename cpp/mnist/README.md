@@ -3,6 +3,11 @@
 This folder contains an example of training a computer vision model to recognize
 digits in images from the MNIST dataset, using the PyTorch C++ frontend.
 
+PAPI test is added. However, there might be some bug that if the /usr/local/cuda-10.2/lib64/stubs/libcuda.so is linked, there will be an error for PAPI to run. 
+To fix that, comment line #97 on TorchConfig.cmake under libtorch/share/cmake/Torch
+TODO: Understand why
+
+
 The entire training code is contained in `mnist.cpp`.
 
 To build the code, run the following commands from your terminal:

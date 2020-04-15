@@ -32,13 +32,6 @@ set(PAPI_CUDA_ROOT $ENV{CUDA_HOME})
 set(PAPI_CUPTI_ROOT $ENV{CUDA_HOME}/extras/CUPTI)
 set(CUDRV_ROOT $ENV{CUDA_HOME})
 
-
-#SET(CMAKE_EXE_LINKER_FLAGS "-Wl,--enable-new-dtags")
-#set(RTFLAGS "-Wl,-runpath,")
-
-SET(ENV{LD_LIBRARY_PATH} "/users/eric_nyu/eric/libtorch/lib;/users/eric_nyu/eric/conda3/envs/vas/lib;/usr/local/cuda/lib64;${PAPI_CUDA_ROOT}/lib;$ENV{LD_LIBRARY_PATH}")
-
-
 include_directories($ENV{PAPI_HOME}/src/testlib $ENV{PAPI_HOME}/src ${PAPI_CUDA_ROOT}/include ${PAPI_CUPTI_ROOT}/include $ENV{PAPI_HOME}/src/validation_tests)
 #add_executable(mnist mnist.cpp)
 message(STATUS $ENV{LD_LIBRARY_PATH})
@@ -48,14 +41,12 @@ target_compile_features(mnist PUBLIC cxx_range_for)
 target_link_libraries(mnist ${TORCH_LIBRARIES} 
     $ENV{PAPI_HOME}/src/libpapi.a 
     $ENV{PAPI_HOME}/src/testlib/libtestlib.a
-    cudart cuda cupti pfm dl)
-# 
+    cudart cuda pfm dl)
 
 add_compile_options(${RTFLAGS})
 include_directories($ENV{PAPI_HOME}/src/testlib $ENV{PAPI_HOME}/src ${PAPI_CUDA_ROOT}/include ${PAPI_CUPTI_ROOT}/include $ENV{PAPI_HOME}/src/validation_tests)
 # message(STATUS ${PAPI_CUDA_ROOT})
 link_directories(helloworld ${PAPI_CUDA_ROOT}/lib64 ${CMAKE_PREFIX_PATH}/lib)
-message(STATUS ${RTFLAGS})
 cuda_add_executable(helloworld HelloWorld.cu)
 # target_compile_features(helloworld PUBLIC cxx_range_for)
 target_link_libraries(helloworld
